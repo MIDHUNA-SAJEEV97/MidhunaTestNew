@@ -2,6 +2,7 @@ package testPackSample;
 
 import com.aventstack.extentreports.ExtentReports;
 import com.aventstack.extentreports.ExtentTest;
+import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.openqa.selenium.*;
 import org.openqa.selenium.edge.EdgeDriver;
 import org.openqa.selenium.edge.EdgeOptions;
@@ -15,8 +16,11 @@ import org.testng.annotations.BeforeMethod;
 
 import com.aventstack.extentreports.*;
 import com.aventstack.extentreports.markuputils.*;
+import utils.ExcelUtils;
 
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.text.SimpleDateFormat;
@@ -31,6 +35,9 @@ import java.lang.reflect.Method;
         protected WebDriverWait wait;
         protected ExtentReports extent = ReportManager.getInstance();
         protected ExtentTest test;
+        protected XWPFDocument doc;
+        protected FileOutputStream out;
+        protected int currentRow;
 
         @BeforeMethod(alwaysRun = true)
         public void setUp(Method method) {
@@ -63,6 +70,9 @@ import java.lang.reflect.Method;
             ((JavascriptExecutor) driver)
                     .executeScript("arguments[0].scrollIntoView({block: 'center'});", element);
             return element;
+        }
+        public void captureStepScreenshot(String stepName) throws IOException {
+            ExcelUtils.addScreenshotToWord(driver, doc, stepName, currentRow);
         }
 
         @AfterMethod(alwaysRun = true)
@@ -107,10 +117,19 @@ import java.lang.reflect.Method;
         @AfterSuite(alwaysRun = true)
         public void flushReport() {
             extent.flush();
-            if (driver != null) driver.quit();
+
+            try {
+                if (doc != null) {
+                    doc.write(out);
+                    out.close();
+                    doc.close();
+                }
+            } catch (Exception e) {
+                System.out.println("Error saving evidence doc: " + e.getMessage());
+            }
+
+         //   if (driver != null) driver.quit();
         }
-
-
 
     }
 

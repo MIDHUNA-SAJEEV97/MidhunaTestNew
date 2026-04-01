@@ -10,7 +10,9 @@ import utils.ExcelUtils;
 
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.text.SimpleDateFormat;
 import java.time.Duration;
+import java.util.Date;
 import java.util.List;
 import java.util.Random;
 
@@ -27,16 +29,22 @@ public class UWACCOUNTFinalVersion extends BaseClass {
 
         //Getting Total Col Counts in the Excel sheet
         int NofCols = ExcelUtils.getCellCount(filepath, "UW Datas", NofRows);
-
-        //Creating new word doc for Capturing evidence
-        XWPFDocument doc = new XWPFDocument();
-        FileOutputStream out = new FileOutputStream(System.getProperty("user.dir") + "\\TestResources\\TestEvidence.docx");
-
-
         wait = new WebDriverWait(driver, Duration.ofSeconds(30));
 
         for (int r = 1; r <= 1; r++) {
-
+            //Creating new word doc for Capturing evidence
+            currentRow = r;   //  now r exists
+            doc = new XWPFDocument();   //  create a fresh doc for each row
+            //out = new FileOutputStream(System.getProperty("user.dir") + "\\TestResources\\TestEvidence.docx");
+            out = new FileOutputStream(System.getProperty("user.dir") + "\\TestResources\\Evidence_Row_" + r + ".docx");     //Give each row its OWN evidence file
+//// adding timestamp
+//Your evidence file WILL not be overwritten on every new test run
+//            String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+//            out = new FileOutputStream(
+//                    System.getProperty("user.dir") +
+//                            "\\TestResources\\Evidence_Row_" + r + "_" + timestamp + ".docx"
+//            );
+/////
             UWData data = readExcelRow(filepath, r);
             driver.get("https://ops.digital-trading.int.hub.allianz.co.uk/Public/PreQuoteQuestions?PackageId=7&pageNumber=1");
 
@@ -47,19 +55,14 @@ public class UWACCOUNTFinalVersion extends BaseClass {
             fillClaimsHistory(data);
             fillMaterialDamage(data);
             fillAdditionalCovers(data);
-            fillUnderwriterEditorsAndReferral(data);
+           // fillUnderwriterEditorsAndReferral();
+            fillUnderwriterEditorsAndReferralIfPresent();
             fillEndorseClause();
-//            fillQuoteSummary(data, filepath, r);
-//            fillPaymentDetails();
-            // extractPolicyNumber(data, doc, filepath, r);
+            fillQuoteSummary(data, filepath,r,doc);
+            fillPaymentDetails(data);
+            extractPolicyNumber(data, doc, filepath, r);
 
             System.out.println("Quote created using row: " + r);
-            // SAVE & CLOSE WORD DOCUMENT
-//            doc.write(out);
-//            out.close();
-//            doc.close();
-//            System.out.println("Evidence document saved successfully.");
-
         }
     }
     // =============================================================
@@ -73,11 +76,10 @@ public class UWACCOUNTFinalVersion extends BaseClass {
         String HMRevenueDeclarationYN,HMRevenueCountIfYes,LitigationDeclarationYN,LitigationCountIfYes;
         String claimHistoryInPast5YrsYN,claimCauseIfYes,claimOccurrenceDateIfYes,totalMonetaryAmountIfYes,selectDayOneUpliftPercentage;
         String totalDeclaredValueOfInstalledComputer, singleItemLossLimitForInstalledComputer,doestheInsuredRequirePortableComputerEquipmentYN,totaldeclaredValuePortableComputerEquipment,singleItemLossLimitForPortableComputerEquipment;
-        String PortableComputerExcessTheft,PortableComputerExcessOtherClaims;
+        String PortableComputerExcessTheft,PortableComputerExcessOtherClaims,PleaseConfirmYouWantToHaveShortTermPolicy,RenewalBehaviour;
         String requiredSumInsuredBreakdownBusinessInterruption,DoesInsuredRequireTerrorismCoverYN,ExcessPeriod,DoesInsuredHaveMaintenanceAgreementForComputerandAuxiliaryEquipment;
         String computerMediaAdditionalCoverYN,IndemnityPeriodBreakdownBusinessInterruption,WhatTypeBreakdownBusinessInterruptionCoverisRequired,DoesInsuredRequireBreakdownBusinessInterruptionYN,sumInsuredRrespectOfMaliciousCodeOrAttackCover,sumInsuredForComputerMediaAdditionalCover,doesInsuredRequireAdditionalExpenditureCoverYN,requiredSumInsuredExpenditureCover,requiredIndemnityPeriodAdditionalExpenditureCover,eRisksCoverYN,sumInsuredRespectOfSeekDestroyAndPreventCover;
     }
-
 
     // =============================================================
     // READ ONE ROW FROM EXCEL
@@ -153,6 +155,9 @@ public class UWACCOUNTFinalVersion extends BaseClass {
         d.DoesInsuredHaveMaintenanceAgreementForComputerandAuxiliaryEquipment = ExcelUtils.getCellData(filepath, "UW Datas", r, 57);
         d.ExcessPeriod = ExcelUtils.getCellData(filepath, "UW Datas", r, 58);
         d.DoesInsuredRequireTerrorismCoverYN = ExcelUtils.getCellData(filepath, "UW Datas", r, 59);
+       // d.PleaseConfirmYouWantToHaveShortTermPolicy = ExcelUtils.getCellData(filepath, "UW Datas", r, 60);
+        d.RenewalBehaviour = ExcelUtils.getCellData(filepath, "UW Datas", r, 60);
+
         return d;
     }
 
@@ -174,8 +179,11 @@ public class UWACCOUNTFinalVersion extends BaseClass {
         // If your UI keeps the secondary block open due to previous state,
         // add steps to unselect/clear it here (collapse accordion, clear inputs, etc.).
     }
+    private boolean getRandomBoolean() {
+        return new Random().nextBoolean();
+    }
 
-    private void selectBrokerAccount(UWData d) throws InterruptedException {
+    private void selectBrokerAccount(UWData d) throws InterruptedException, IOException {
         WebElement OrganisationAccountName = driver.findElement(By.id("SelectedAgentGroupName"));
         OrganisationAccountName.sendKeys(d.accountType);
         WebElement OrganisationDesiredOption = wait.until(ExpectedConditions.elementToBeClickable(By.xpath("//div[contains(text(), '" + d.accountType + "')]")));
@@ -225,15 +233,17 @@ public class UWACCOUNTFinalVersion extends BaseClass {
         ContactPhoneNumber.sendKeys(d.contactPhone);
         WebElement ContactEmailAddress = driver.findElement(By.id("InsuranceAdviserEmail"));
         ContactEmailAddress.sendKeys(d.contactEmail);
+
+        captureStepScreenshot("SelectBrokerAccount Page ");
+
         WebElement AccountSelectionContinueBtn = driver.findElement(By.xpath("//*[@id=\"instandaquestions\"]/div[2]/div/div/div[2]/button[2]"));
         AccountSelectionContinueBtn.click();
+
     }
 
-    private boolean getRandomBoolean() {
-        return new Random().nextBoolean();
-    }
 
-    private void fillInsuredDetails(UWData d) throws InterruptedException {
+
+    private void fillInsuredDetails(UWData d) throws InterruptedException, IOException {
 
         wait.until(ExpectedConditions.visibilityOfElementLocated(By.xpath("//*[@id=\"page-title\"]/div[1]/h1[2]")));
         WebElement LegaltradingStatus = driver.findElement(By.id("LegalTradingStatus"));
@@ -406,10 +416,12 @@ public class UWACCOUNTFinalVersion extends BaseClass {
             }
         }
 
-//        WebElement EstimatedPercentageTurnover = driver.findElement(By.id("EstimatedPercentageTurnover"));
-//        EstimatedPercentageTurnover.clear();
-//        EstimatedPercentageTurnover.sendKeys("100");
-        //---------------------------------------------------------------------------
+        //----------------------------concept-----------------------------------------------
+//        The system requires total estimated turnover = 100%
+//                If there is only 1 business activity, then that one must be 100%
+//                If secondary business = NO, then there should be no second percentage and no validation error
+//        If secondary business = YES, then both percentages must add to 100% (Example: 80 + 20, 70 + 30, 100 + 0)
+        //---------------------------------------------------------------------------------------------
 
         String secondaryBusinessFlag = d.doesInsuredHaveSecondaryBusinessActivity;
         String primaryPctStr = d.turnoverPercentagePrimary;  // whatever column holds it
@@ -496,13 +508,16 @@ public class UWACCOUNTFinalVersion extends BaseClass {
                     By.xpath("//*[@id=\"question8028\"]/div[1]/div[2]/div[1]/div[1]/label[2]"))); // <-- selecting No
             doesInsuredHaveThirdBusinessActivity.click();
         }
+
+        captureStepScreenshot("Insured Details Page ");
         // Finally, continue
         WebElement InsuredContinueButton = wait.until(ExpectedConditions.elementToBeClickable(
                 By.xpath("//*[@id=\"instandaquestions\"]/div[2]/div/div/div[3]/button[3]")));
         InsuredContinueButton.click();
+
     }
 
-    private void fillCoverDates(UWData d) {
+    private void fillCoverDates(UWData d) throws IOException {
         WebElement PolicyInceptionDate = driver.findElement(By.id("PolicyInceptionDate"));
         PolicyInceptionDate.clear();
         PolicyInceptionDate.sendKeys(d.coverStartDate);
@@ -522,11 +537,13 @@ public class UWACCOUNTFinalVersion extends BaseClass {
             WebElement PolicyEndDateOptionNo = PolicyEndDateNo.findElement(By.xpath("//*[@id=\"question1082\"]/div[1]/div[2]/div[1]/div[1]/label[2]"));
             jsClick(PolicyEndDateOptionNo);
         }
+
+        captureStepScreenshot("CoverDates Page ");
         WebElement CoverDatesContinueButton = driver.findElement(By.xpath("//*[@id=\"instandaquestions\"]/div[2]/div/div/div[3]/button[3]"));
         CoverDatesContinueButton.click();
     }
 
-    private void fillDeclarations(UWData d) {
+    private void fillDeclarations(UWData d) throws IOException {
         WebElement CriminalConvictions = driver.findElement(By.xpath("//*[@id=\"question1722\"]/div[1]/div[2]/div[1]/div[1]"));
         WebElement CCOptionNo = CriminalConvictions.findElement(By.xpath("//*[@id=\"question1722\"]/div[1]/div[2]/div[1]/div[1]/label[2]"));
         CCOptionNo.click();
@@ -583,15 +600,15 @@ public class UWACCOUNTFinalVersion extends BaseClass {
             WebElement LitigationDisputesNumOccuranceLast5Years = driver.findElement(By.xpath("//*[@id=\"LitigationDisputesOccuranceLast5Years\"]"));
             LitigationDisputesNumOccuranceLast5Years.sendKeys(d.LitigationCountIfYes);
         } else {
-            WebElement Litigation = driver.findElement(By.xpath("//*[@id=\\\"question1765\\\"]/div[1]/div[2]/div[1]/div[1]"));
+            WebElement Litigation = driver.findElement(By.xpath("//*[@id=\"question1765\"]/div[1]/div[2]/div[1]/div[1]"));
             WebElement LitigationOptionNo = Litigation.findElement(By.xpath("//*[@id=\"question1765\"]/div[1]/div[2]/div[1]/div[1]/label[2]"));
             LitigationOptionNo.click();
         }
-
+        captureStepScreenshot("Declarations Page ");
         WebElement DeclarationsContinueButton = driver.findElement(By.xpath("//*[@id=\"instandaquestions\"]/div[2]/div/div/div[3]/button[3]"));
         DeclarationsContinueButton.click();
     }
-    private void fillClaimsHistory(UWData d) throws InterruptedException {
+    private void fillClaimsHistory(UWData d) throws InterruptedException, IOException {
 
 //             claimHistoryInPast5YrsYN :     YES / NO FROM EXCEL
         if (d.claimHistoryInPast5YrsYN.equalsIgnoreCase("YES")) {
@@ -639,11 +656,13 @@ public class UWACCOUNTFinalVersion extends BaseClass {
             WebElement saveButton = scrollUntilVisible(By.xpath("//*[@id=\"instandaquestions\"]/div[2]/div/div/div[3]/button[2]"));
             saveButton.click();
         }
-        WebElement ClaimsHistoryContinueButton = driver.findElement(By.xpath("//*[@id=\"instandaquestions\"]/div[2]/div/div/div[3]/button[3]"));
-        ClaimsHistoryContinueButton.click();
+        Thread.sleep(1000);
+        captureStepScreenshot("ClaimsHistory Page ");
+        WebElement ClaimsHistoryContinueButton = wait.until(ExpectedConditions.elementToBeClickable((By.xpath("//*[@id=\"instandaquestions\"]/div[2]/div/div/div[3]/button[3]"))));
+        jsClick(ClaimsHistoryContinueButton);
     }
 
-    private void fillMaterialDamage(UWData d) throws InterruptedException {
+    private void fillMaterialDamage(UWData d) throws InterruptedException, IOException {
         WebElement selectDayOneUpliftPercentage = driver.findElement(By.xpath("//*[@id=\"DayOneUplift\"]"));
         jsClick(selectDayOneUpliftPercentage);
         Thread.sleep(500);
@@ -761,14 +780,14 @@ public class UWACCOUNTFinalVersion extends BaseClass {
             WebElement PortableComputerOptionNo = PortableComputer.findElement(By.xpath("//*[@id=\"question2100\"]/div[1]/div[2]/div[1]/div[1]/label[2]"));
             PortableComputerOptionNo.click();
         }
-
+        captureStepScreenshot("MaterialDamage Page ");
         WebElement MaterialDamageContinueButton = driver.findElement(By.xpath("//*[@id=\"instandaquestions\"]/div[2]/div/div/div[3]/button[3]"));
         MaterialDamageContinueButton.click();
 
 
     }
 
-    private void fillAdditionalCovers(UWData d) {
+    private void fillAdditionalCovers(UWData d) throws IOException {
 //--------------concept---------------------
         //• If E-Risk = YES ➜ Computer Media (AT) = YES AND Additional Exp (AV) = YES (mandatory)
         //• If E-Risk = NO ➜ No restriction (anything is fine)
@@ -868,10 +887,35 @@ public class UWACCOUNTFinalVersion extends BaseClass {
             WebElement TerrorismOptionNo = Terrorism.findElement(By.xpath("//*[@id=\"question1217\"]/div[2]/div[1]/div/div[1]/label[2]"));
             TerrorismOptionNo.click();
         }
+        captureStepScreenshot("AdditionalCovers Page ");
         WebElement AdditonalPageContinueButton = driver.findElement(By.xpath("//*[@id=\"instandaquestions\"]/div[2]/div/div/div[3]/button[3]"));
         AdditonalPageContinueButton.click();
     }
-    private void fillUnderwriterEditorsAndReferral(UWData d) throws InterruptedException {
+    public boolean isReferralPagePresent() {
+        try {
+            WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(5));
+           // wait.until(ExpectedConditions.presenceOfElementLocated(By.id("Reason")));    // Referral box exists → Referral page is present
+//            wait.until(ExpectedConditions.presenceOfElementLocated(By.xpath("//*[@id=\"page-title\"]/div[1]/h1")));
+//            scrollUntilVisible((By.id("Reason")));
+            wait.until(ExpectedConditions.visibilityOfAllElementsLocatedBy(By.xpath("//input[@type='checkbox']")));
+            return true;
+        } catch (TimeoutException e) {
+            return false;  // No referral page
+        }
+    }
+
+  private void fillUnderwriterEditorsAndReferralIfPresent() throws InterruptedException, IOException {
+
+    if (isReferralPagePresent()) {
+        System.out.println("Referral detected → Handling referral page...");
+        captureStepScreenshot("Referral detected → Handling referral page");
+        fillUnderwriterEditorsAndReferral();
+    } else {
+        System.out.println("Referral NOT detected → Skipping to EndorseClause...");
+        //fillEndorseClause();
+    }
+}
+    private void fillUnderwriterEditorsAndReferral() throws IOException {
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(20));
         //  Wait for ANY checkbox
         List<WebElement> checkboxes = wait.until(ExpectedConditions.visibilityOfAllElementsLocatedBy(By.xpath("//input[@type='checkbox']")));
@@ -902,87 +946,100 @@ public class UWACCOUNTFinalVersion extends BaseClass {
     WebElement reasontextbox = wait.until(ExpectedConditions.visibilityOfElementLocated(By.id("Reason")));
     reasontextbox.clear();
     reasontextbox.sendKeys("Cleared all referrals");
+
+    captureStepScreenshot("UW EditorAndReferral Page ");
     // Click Continue / Clear View Endorsement button
     WebElement clearViewEndorsementButton = wait.until(ExpectedConditions.elementToBeClickable(By.xpath("//*[@id=\"instanda-site-layout\"]/div[2]/div[2]/div/div/div/div/form/div[2]/input[2]")));
     clearViewEndorsementButton.click();
     }
 
-    private void fillEndorseClause() throws InterruptedException {
+    private void fillEndorseClause() throws InterruptedException, IOException {
+        captureStepScreenshot("EndorseClause Page ");
         WebElement EndorseClauseContinueButton = wait.until(ExpectedConditions.elementToBeClickable(By.xpath("//*[@id=\"instanda-site-layout\"]/div[2]/div[3]/div/form/div[2]/div/div/div[2]/button")));
         EndorseClauseContinueButton.click();
     }
 
 
-//    private void fillQuoteSummary(UWData d,  String filepath, int r) throws IOException, InterruptedException {
-//        WebElement quoteRefno = wait.until(ExpectedConditions.visibilityOfElementLocated(By.xpath("//*[@id=\"page-title\"]/div[1]/div[3]")));
-//        String quoteReference_number = quoteRefno.getText().trim();
-//        String quoteReference = "";
-//        try {
-//            quoteReference = quoteReference_number.replaceAll(".*Quote Reference:\\s*", "")
-//                    .replaceAll("\\s+.*", "")
-//                    .trim();
-//        } catch (Exception e) {
-//            quoteReference = "";
-//        }
-//        System.out.println("Extracted Quote Reference: " + quoteReference);
-//        Thread.sleep(3000); // for screenshot timing
-//        ExcelUtils.SetCellData(filepath, "UW Details", r, 16, quoteReference);
-//        WebElement QuoteSummaryContinueButton = driver.findElement(By.id("continueButton"));
-//        QuoteSummaryContinueButton.click();
-//    }
-//
-//    private void fillPaymentDetails() {
-//        WebElement PaymentPageContinueButton = driver.findElement(By.xpath("//*[@id=\"instandaquestions\"]/div[3]/div/div/div[2]/button[2]"));
-//        PaymentPageContinueButton.click();
-//    }
-//
-//    private String extractPolicyNumber(UWData d, XWPFDocument doc, String filepath, int r) throws InterruptedException, IOException {
-//        WebElement policyno = wait.until(ExpectedConditions.visibilityOfElementLocated(By.xpath("//*[@id=\"page-title\"]/div[1]/div[2]")));
-//        String policy_number = policyno.getText().trim();
-//        WebElement quoteRefno = wait.until(ExpectedConditions.visibilityOfElementLocated(By.xpath("//*[@id=\"page-title\"]/div[1]/div[3]")));
-//        String quoteReference_number = quoteRefno.getText().trim();
-//        // System.out.println("Policy Number for " + d.insuredName + " : " + policy_number);
-//        Thread.sleep(3000);
-//        // Capture Screenshot into Word (your utility method signature assumed)
-//        ExcelUtils.addScreenshotToWord(driver, doc, "Policy number for " + d.insuredName + " is: " + policy_number, r);
-//        // -----------------------------------------------
-//        // EXTRACT ONLY POLICY NUMBER → e.g. BX30089662
-//        // -----------------------------------------------
-//        String policyNumber = "";
-//        try {
-//            policyNumber = policy_number.replaceAll(".*Policy No\\.?:\\s*", "")
-//                    .replaceAll("\\s+.*", "")
-//                    .trim();
-//        } catch (Exception e) {
-//            policyNumber = "";
-//        }
-//        System.out.println("Extracted Policy Number: " + policyNumber);
-//        // -----------------------------------------------
-//        // EXTRACT ONLY QUOTE REFERENCE → e.g. E4V3J8
-//        // -----------------------------------------------
-//        String quoteReference = "";
-//        try {
-//            quoteReference = quoteReference_number.replaceAll(".*Quote Reference:\\s*", "")
-//                    .replaceAll("\\s+.*", "")
-//                    .trim();
-//        } catch (Exception e) {
-//            quoteReference = "";
-//        }
-//        System.out.println("Extracted Quote Reference: " + quoteReference);
-//        Thread.sleep(3000); // for screenshot timing
-//        // Screenshot into Word
-//        ExcelUtils.addScreenshotToWord(driver, doc,
-//                "Policy: " + policyNumber + " | Quote Reference: " + quoteReference, r);
-//
-//        //  ExcelUtils.SetCellData(filepath, "UW Details", r, 15, quoteReference);
-//        ExcelUtils.SetCellData(filepath, "UW Details", r, 17, policyNumber);
-//
-//        if (!policyNumber.isEmpty()) {
-//            ExcelUtils.SetCellData(filepath, "UW Details", r, 18, "Success");
+    private void fillQuoteSummary(UWData d,  String filepath, int r,XWPFDocument doc) throws IOException, InterruptedException {
+       Thread.sleep(1000);
+        WebElement quoteRefno = wait.until(ExpectedConditions.visibilityOfElementLocated(By.xpath("//*[@id=\"page-title\"]/div[1]/div[3]")));
+        String quoteReference_number = quoteRefno.getText().trim();
+        String quoteReference = "";
+        try {
+            quoteReference = quoteReference_number.replaceAll(".*Quote Reference:\\s*", "")
+                    .replaceAll("\\s+.*", "")
+                    .trim();
+        } catch (Exception e) {
+            quoteReference = "";
+        }
+        System.out.println("Extracted Quote Reference: " + quoteReference);
+        Thread.sleep(3000); // for screenshot timing
+        ExcelUtils.SetCellData(filepath, "UW Datas", r, 61, quoteReference);
+        captureStepScreenshot("QuoteSummary Page ");
+        WebElement QuoteSummaryContinueButton = driver.findElement(By.id("continueButton"));
+        QuoteSummaryContinueButton.click();
+    }
+    private void fillPaymentDetails(UWData d) throws IOException {
+
+//        if (d.PleaseConfirmYouWantToHaveShortTermPolicy.equalsIgnoreCase("Yes")) {
+//            WebElement shortTermPolicyYes = driver.findElement(By.xpath("//*[@id=\"question1218\"]/div[2]/div[1]/div/div[1]/label[1]"));
+//            shortTermPolicyYes.click();
 //        } else {
-//            ExcelUtils.SetCellData(filepath, "UW Details", r, 18, "Failed");
-//            ExcelUtils.FillCellRed(filepath, "UW Details", r, 18);
+//            WebElement shortTermPolicyNo = driver.findElement(By.xpath("//*[@id=\"question1218\"]/div[2]/div[1]/div/div[1]/label[2]"));
+//            shortTermPolicyNo.click();
 //        }
-//        return policyNumber;
-//    }
+        WebElement RenewalBehaviour = driver.findElement(By.xpath("//*[@id=\"RenewalBehaviour\"]"));
+        RenewalBehaviour.sendKeys(d.RenewalBehaviour);
+        captureStepScreenshot("Payment Details Page ");
+        WebElement PaymentPageContinueButton = driver.findElement(By.xpath("//*[@id=\"instandaquestions\"]/div[3]/div/div/div[2]/button[2]"));
+        PaymentPageContinueButton.click();
+    }
+
+    private String extractPolicyNumber(UWData d, XWPFDocument doc, String filepath, int r) throws InterruptedException, IOException {
+        WebElement policyno = wait.until(ExpectedConditions.visibilityOfElementLocated(By.xpath("//*[@id=\"page-title\"]/div[1]/div[2]")));
+        String policy_number = policyno.getText().trim();
+        WebElement quoteRefno = wait.until(ExpectedConditions.visibilityOfElementLocated(By.xpath("//*[@id=\"page-title\"]/div[1]/div[3]")));
+        String quoteReference_number = quoteRefno.getText().trim();
+        Thread.sleep(3000);
+        // -----------------------------------------------
+        // EXTRACT ONLY POLICY NUMBER → e.g. BX30089662
+        // -----------------------------------------------
+        String policyNumber = "";
+        try {
+            policyNumber = policy_number.replaceAll(".*Policy No\\.?:\\s*", "")
+                    .replaceAll("\\s+.*", "")
+                    .trim();
+        } catch (Exception e) {
+            policyNumber = "";
+        }
+        System.out.println("Extracted Policy Number: " + policyNumber);
+        // -----------------------------------------------
+        // EXTRACT ONLY QUOTE REFERENCE → e.g. E4V3J8
+        // -----------------------------------------------
+        String quoteReference = "";
+        try {
+            quoteReference = quoteReference_number.replaceAll(".*Quote Reference:\\s*", "")
+                    .replaceAll("\\s+.*", "")
+                    .trim();
+        } catch (Exception e) {
+            quoteReference = "";
+        }
+        System.out.println("Extracted Quote Reference: " + quoteReference);
+        Thread.sleep(3000); // for screenshot timing
+        // Screenshot into Word
+        //ExcelUtils.addScreenshotToWord(driver, doc, "Policy number for " + d.insuredName + " is: " + policy_number, r);
+        ExcelUtils.addScreenshotToWord(driver, doc, "Extracted Policy Number : " + policyNumber + " & Quote Reference Num : " + quoteReference + "  For " +  d.insuredName, r);
+
+        //  ExcelUtils.SetCellData(filepath, "UW Datas", r, 61, quoteReference);
+        ExcelUtils.SetCellData(filepath, "UW Datas", r, 62, policyNumber);
+
+        if (!policyNumber.isEmpty()) {
+            ExcelUtils.SetCellData(filepath, "UW Datas", r, 63, "Pass");
+            ExcelUtils.FillCellGreen(filepath, "UW Datas", r, 63);
+        } else {
+            ExcelUtils.SetCellData(filepath, "UW Datas", r, 64, "Fail");
+            ExcelUtils.FillCellRed(filepath, "UW Datas", r, 64);
+        }
+        return policyNumber;
+    }
 }
